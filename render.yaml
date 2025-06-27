@@ -1,0 +1,21 @@
+services:
+  - type: redis
+    name: redis-service
+    plan: starter
+    region: oregon
+    
+  - type: web
+    name: redis-app
+    env: node
+    buildCommand: npm install
+    startCommand: npm start
+    plan: starter
+    region: oregon
+    envVars:
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: redis-service
+          property: connectionString
+      - key: NODE_ENV
+        value: production
