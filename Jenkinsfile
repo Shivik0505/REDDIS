@@ -21,6 +21,7 @@ pipeline {
         TF_INPUT = 'false'
         ANSIBLE_HOST_KEY_CHECKING = 'False'
         ANSIBLE_CONFIG = './ansible.cfg'
+        PATH = "/opt/homebrew/bin:/usr/local/bin:${env.PATH}"
     }
 
     stages {
