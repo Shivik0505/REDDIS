@@ -140,16 +140,26 @@ pipeline {
                     string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
                     string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
                 ]) {
-                    sh '''
-                        # Create inventory
-                        ./create-clean-inventory.sh
-                        
-                        # Test connectivity
-                        ansible all -i inventory.ini -m ping --timeout=30 || echo "⚠️ Connectivity issues"
-                        
-                        # Run playbook
-                        ansible-playbook -i inventory.ini playbook.yml --timeout=120 -v || echo "⚠️ Ansible issues - manual config may be needed"
-                    '''
+                    script {
+                        try {
+                            sh '''
+                                # Create inventory
+                                ./create-clean-inventory.sh
+                                
+                                # Test connectivity
+                                echo "🔍 Testing connectivity to Redis nodes..."
+                                ansible all -i inventory.ini -m ping --timeout=30 || echo "⚠️ Connectivity issues - continuing anyway"
+                                
+                                # Run playbook
+                                echo "🚀 Running Redis configuration playbook..."
+                                ansible-playbook -i inventory.ini playbook.yml --timeout=120 -v || echo "⚠️ Ansible configuration had issues - manual setup may be needed"
+                            '''
+                        } catch (Exception e) {
+                            echo "⚠️ Ansible configuration failed: ${e.getMessage()}"
+                            echo "📝 Infrastructure is deployed but Redis configuration needs manual setup"
+                            echo "📋 Use the connection guide to manually configure Redis cluster"
+                        }
+                    }
                 }
             }
         }
@@ -162,11 +172,30 @@ pipeline {
                 }
             }
             steps {
-                sh '''
-                    PUBLIC_IP=$(aws ec2 describe-instances --region $AWS_DEFAULT_REGION --filters "Name=tag:Name,Values=redis-public" "Name=instance-state-name,Values=running" --query 'Reservations[].Instances[].PublicIpAddress' --output text)
-                    PRIVATE_IPS=($(aws ec2 describe-instances --region $AWS_DEFAULT_REGION --filters "Name=tag:Name,Values=redis-private*" "Name=instance-state-name,Values=running" --query 'Reservations[].Instances[].PrivateIpAddress' --output text))
-                    
-                    cat > connection-guide.txt << EOF
+                withCredentials([
+                    string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
+                    string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
+                ]) {
+                    script {
+                        try {
+                            sh '''
+                                echo "📋 Generating connection guide..."
+                                
+                                # Get current running instances
+                                PUBLIC_IP=$(aws ec2 describe-instances --region $AWS_DEFAULT_REGION --filters "Name=tag:Name,Values=redis-public" "Name=instance-state-name,Values=running" --query 'Reservations[].Instances[].PublicIpAddress' --output text | head -1)
+                                PRIVATE_IPS=($(aws ec2 describe-instances --region $AWS_DEFAULT_REGION --filters "Name=tag:Name,Values=redis-private*" "Name=instance-state-name,Values=running" --query 'Reservations[].Instances[].PrivateIpAddress' --output text | head -3))
+                                
+                                if [ -z "$PUBLIC_IP" ] || [ "$PUBLIC_IP" = "None" ]; then
+                                    echo "❌ No bastion host found"
+                                    exit 1
+                                fi
+                                
+                                if [ ${#PRIVATE_IPS[@]} -eq 0 ]; then
+                                    echo "❌ No Redis nodes found"
+                                    exit 1
+                                fi
+                                
+                                cat > connection-guide.txt << EOF
 Redis Infrastructure Connection Guide
 ====================================
 Bastion Host: ${PUBLIC_IP}
@@ -176,11 +205,40 @@ Connect to Bastion:
 ssh -i ${KEY_PAIR_NAME}.pem ubuntu@${PUBLIC_IP}
 
 Connect to Redis Nodes:
-ssh -i ${KEY_PAIR_NAME}.pem -J ubuntu@${PUBLIC_IP} ubuntu@${PRIVATE_IPS[0]}
-ssh -i ${KEY_PAIR_NAME}.pem -J ubuntu@${PUBLIC_IP} ubuntu@${PRIVATE_IPS[1]}
-ssh -i ${KEY_PAIR_NAME}.pem -J ubuntu@${PUBLIC_IP} ubuntu@${PRIVATE_IPS[2]}
 EOF
-                '''
+                                
+                                # Add individual node connections
+                                for i in "${!PRIVATE_IPS[@]}"; do
+                                    echo "ssh -i ${KEY_PAIR_NAME}.pem -J ubuntu@${PUBLIC_IP} ubuntu@${PRIVATE_IPS[$i]}" >> connection-guide.txt
+                                done
+                                
+                                cat >> connection-guide.txt << EOF
+
+Redis Configuration:
+- Default Redis port: 6379
+- Redis Cluster ports: 16379-16384
+- All nodes are in private subnets for security
+- Access via bastion host (jump server)
+
+Security Groups:
+- Public SG: SSH (22), HTTP (80), ICMP
+- Private SG: SSH (22), Redis (6379), Redis Cluster (16379-16384), ICMP
+
+Next Steps:
+1. Download the SSH key from Jenkins artifacts
+2. Use the connection commands above to access your infrastructure
+3. Configure Redis cluster manually if Ansible step failed
+EOF
+                                
+                                echo "✅ Connection guide generated successfully"
+                                cat connection-guide.txt
+                            '''
+                        } catch (Exception e) {
+                            echo "⚠️ Failed to generate connection guide: ${e.getMessage()}"
+                            echo "📝 Please check AWS console for instance details"
+                        }
+                    }
+                }
             }
         }
     }

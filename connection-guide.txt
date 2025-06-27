@@ -1,0 +1,21 @@
+Redis Infrastructure Connection Guide
+====================================
+Bastion Host: 3.110.104.52
+Redis Nodes: 10.0.2.143 10.0.3.32 10.0.4.214
+
+Connect to Bastion:
+ssh -i redis-infra-key.pem ubuntu@3.110.104.52
+
+Connect to Redis Nodes:
+ssh -i redis-infra-key.pem -J ubuntu@3.110.104.52 ubuntu@10.0.2.143
+ssh -i redis-infra-key.pem -J ubuntu@3.110.104.52 ubuntu@10.0.3.32
+ssh -i redis-infra-key.pem -J ubuntu@3.110.104.52 ubuntu@10.0.4.214
+
+Redis Node Details:
+- redis-private-1: 10.0.2.143 (ap-south-1a)
+- redis-private-2: 10.0.3.32  (ap-south-1b)  
+- redis-private-3: 10.0.4.214 (ap-south-1c)
+
+Security Groups:
+- Public SG: SSH (22), HTTP (80), ICMP
+- Private SG: SSH (22), Redis (6379), Redis Cluster (16379-16384), ICMP

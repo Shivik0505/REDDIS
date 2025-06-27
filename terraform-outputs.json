@@ -1,0 +1,26 @@
+{
+  "public-instance-ip": {
+    "value": "3.110.104.52"
+  },
+  "private-instance1-ip": {
+    "value": "10.0.2.143"
+  },
+  "private-instance2-ip": {
+    "value": "10.0.3.32"
+  },
+  "private-instance3-ip": {
+    "value": "10.0.4.214"
+  },
+  "public-instance-id": {
+    "value": "i-0a5f4742d750b6f1d"
+  },
+  "private-instance1-id": {
+    "value": "i-026ca7ca8e8fc9b10"
+  },
+  "private-instance2-id": {
+    "value": "i-02c2701141b0bdfb5"
+  },
+  "private-instance3-id": {
+    "value": "i-0e6b028479cc401bb"
+  }
+}
