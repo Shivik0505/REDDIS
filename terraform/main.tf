@@ -31,6 +31,7 @@ module "instance" {
   pub-sub-id    = module.subnet.pub-sub-id
   private-sg-id = module.security_groups.private-sg-id
   public-sg-id  = module.security_groups.public-sg-id
+  key-name      = var.key-name
 }
 
 module "peering" {
